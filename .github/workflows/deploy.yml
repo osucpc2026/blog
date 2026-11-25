@@ -1,0 +1,51 @@
+name: deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: "0.141.0"
+          extended: true
+      - uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/hugo_cache
+          key: hugo-${{ hashFiles('assets/**', 'hugo.toml', 'go.sum') }}
+          restore-keys: hugo-
+      - run: hugo --minify --gc
+        env:
+          HUGO_CACHEDIR: ${{ runner.temp }}/hugo_cache
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: public
+
+  # アーティファクトはジョブが終わってから確定するので、公開は別のジョブで行う
+  deploy:
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
